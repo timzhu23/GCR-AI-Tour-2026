@@ -156,6 +156,9 @@ winget install -e --id GitHub.cli
 
 在你 fork 的仓库本地 clone 后（或 Codespaces / Dev Container 中），执行：
 
+重要：不要用 `sudo` 运行下面的脚本。
+- `az login` / `gh auth login` 的认证信息是“当前用户”级别的；用 `sudo` 会切到 root 用户，导致脚本看不到你的登录态。
+
 ```bash
 az login
 gh auth login
@@ -189,6 +192,14 @@ gh auth login
 - 创建 Federated Credential（GitHub Actions OIDC，限定 `main` 分支）
 - 为该 SP 分配 RBAC（默认 `Cognitive Services User`，作用域默认建议用资源组）
 - 自动写入 GitHub Actions Variables（不需要 secrets）
+
+常见踩坑（会导致“没有自动写入 Variables”）：
+- 忘了加 `--configure-github` / `-ConfigureGitHub`：脚本会只打印“Next step: set GitHub Repository Variables …”的手工步骤。
+- 在错误的目录/错误的 remote 上运行：脚本会从 `git remote get-url origin` 推断目标仓库。
+  - 建议先执行：`git remote get-url origin`，确认指向你 fork 的仓库（而不是上游仓库）。
+  - 如果你不想依赖推断，可以显式指定：
+    - Bash：`--github-repo <your-github-user>/gcr-ai-tour`
+    - PowerShell：`-GitHubRepo <your-github-user>/gcr-ai-tour`
 
 ### 3) push 到 main，GitHub Actions 自动跑真实 Azure AI
 

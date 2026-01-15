@@ -56,6 +56,26 @@ Tip:
 EOF
 }
 
+print_manual_vars_instructions() {
+  cat <<EOF
+
+== Next step: set GitHub Repository Variables (recommended for labs) ==
+In your GitHub repo: Settings → Secrets and variables → Actions → Variables
+
+Create these Variables:
+  AZURE_CLIENT_ID=${APP_ID}
+  AZURE_TENANT_ID=${TENANT_ID}
+  AZURE_SUBSCRIPTION_ID=${SUBSCRIPTION_ID}
+
+Also set (per-student):
+  AZURE_AI_PROJECT_ENDPOINT=<your-foundry-project-endpoint>
+  AZURE_AI_MODEL_DEPLOYMENT_NAME=<your-model-deployment>
+
+Tip:
+- If you want this script to auto-write Variables, re-run with: --configure-github
+EOF
+}
+
 APP_NAME="gcr-ai-tour-gha-oidc"
 OWNER=""
 REPO=""
@@ -107,6 +127,19 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "${EUID}" -eq 0 ]]; then
+  echo "ERROR: Do not run this script with sudo/root." >&2
+  echo "Azure CLI (az) and GitHub CLI (gh) authentication are per-user." >&2
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+    echo "Re-run as the original user: ${SUDO_USER}" >&2
+    echo "  ./scripts/setup_github_actions_oidc.sh [args...]" >&2
+    echo "If you used 'sudo bash ...', remove sudo and run it normally." >&2
+  else
+    echo "Re-run as a normal user (non-root) who has run: az login (and gh auth login if using --configure-github)." >&2
+  fi
+  exit 1
+fi
+
 if ! command -v az >/dev/null 2>&1; then
   echo "az CLI not found." >&2
   print_cli_install_help
@@ -139,10 +172,20 @@ if [[ -z "$GITHUB_REPO" ]]; then
 fi
 
 if [[ -z "$SUBSCRIPTION_ID" ]]; then
-  SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+  if ! SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null); then
+    echo "ERROR: Azure CLI is not logged in for the current user." >&2
+    echo "Run: az login" >&2
+    echo "Tip: do NOT use sudo for this script; sudo will lose your az login context." >&2
+    exit 1
+  fi
 fi
 if [[ -z "$TENANT_ID" ]]; then
-  TENANT_ID=$(az account show --query tenantId -o tsv)
+  if ! TENANT_ID=$(az account show --query tenantId -o tsv 2>/dev/null); then
+    echo "ERROR: Azure CLI is not logged in for the current user." >&2
+    echo "Run: az login" >&2
+    echo "Tip: do NOT use sudo for this script; sudo will lose your az login context." >&2
+    exit 1
+  fi
 fi
 
 # Scope: prefer resource group if provided, else subscription
@@ -155,6 +198,7 @@ fi
 echo "== GitHub =="
 echo "repo: ${OWNER}/${REPO}"
 echo "branch: ${BRANCH}"
+echo "configure-github: ${CONFIGURE_GITHUB}"
 
 echo "== Azure =="
 echo "subscription: ${SUBSCRIPTION_ID}"
@@ -212,24 +256,6 @@ else
   echo "Role assignment already exists: '${ROLE_NAME}' on ${SCOPE}"
 fi
 
-echo
-cat <<EOF
-== Next step: set GitHub Repository Variables (recommended for labs) ==
-In your GitHub repo: Settings → Secrets and variables → Actions → Variables
-
-Create these Variables:
-  AZURE_CLIENT_ID=${APP_ID}
-  AZURE_TENANT_ID=${TENANT_ID}
-  AZURE_SUBSCRIPTION_ID=${SUBSCRIPTION_ID}
-
-Also set (per-student):
-  AZURE_AI_PROJECT_ENDPOINT=<your-foundry-project-endpoint>
-  AZURE_AI_MODEL_DEPLOYMENT_NAME=<your-model-deployment>
-
-Then run the workflow:
-  Actions → social-insight-workflow → Run workflow
-EOF
-
 if [[ "$CONFIGURE_GITHUB" == "true" ]]; then
   if ! command -v gh >/dev/null 2>&1; then
     echo
@@ -258,5 +284,22 @@ if [[ "$CONFIGURE_GITHUB" == "true" ]]; then
     gh variable set -R "$GITHUB_REPO" AZURE_AI_MODEL_DEPLOYMENT_NAME -b "$AI_MODEL_DEPLOYMENT_NAME" >/dev/null
   fi
 
-  echo "Done. Variables are set in GitHub repo settings."
+  echo
+  echo "== Done: GitHub Actions Variables written =="
+  echo "repo: ${GITHUB_REPO}"
+  echo "AZURE_CLIENT_ID=${APP_ID}"
+  echo "AZURE_TENANT_ID=${TENANT_ID}"
+  echo "AZURE_SUBSCRIPTION_ID=${SUBSCRIPTION_ID}"
+  if [[ -n "$AI_PROJECT_ENDPOINT" ]]; then
+    echo "AZURE_AI_PROJECT_ENDPOINT=(set)"
+  else
+    echo "AZURE_AI_PROJECT_ENDPOINT=(NOT set; pass --ai-project-endpoint or set it manually)"
+  fi
+  if [[ -n "$AI_MODEL_DEPLOYMENT_NAME" ]]; then
+    echo "AZURE_AI_MODEL_DEPLOYMENT_NAME=${AI_MODEL_DEPLOYMENT_NAME}"
+  else
+    echo "AZURE_AI_MODEL_DEPLOYMENT_NAME=(not set; workflow default is gpt-5-mini)"
+  fi
+else
+  print_manual_vars_instructions
 fi

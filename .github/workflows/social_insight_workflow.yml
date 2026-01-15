@@ -60,6 +60,14 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Prefer GitHub Repository Variables (vars) to allow 0 secrets in a lab.
+      # Fallback to secrets for teams who prefer secrets.
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID || secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID || secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID || secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AI_PROJECT_ENDPOINT: ${{ vars.AZURE_AI_PROJECT_ENDPOINT || secrets.AZURE_AI_PROJECT_ENDPOINT }}
+      AZURE_AI_MODEL_DEPLOYMENT_NAME: ${{ vars.AZURE_AI_MODEL_DEPLOYMENT_NAME || secrets.AZURE_AI_MODEL_DEPLOYMENT_NAME || 'gpt-5-mini' }}
 
     steps:
       - name: Checkout
@@ -77,19 +85,45 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Preflight (required GitHub Variables/Secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+
+          if [[ -z "${AZURE_CLIENT_ID}" ]]; then
+            echo "Missing AZURE_CLIENT_ID (set as GitHub Actions Variable or Secret)." >&2
+            missing=1
+          fi
+          if [[ -z "${AZURE_TENANT_ID}" ]]; then
+            echo "Missing AZURE_TENANT_ID (set as GitHub Actions Variable or Secret)." >&2
+            missing=1
+          fi
+          if [[ -z "${AZURE_SUBSCRIPTION_ID}" ]]; then
+            echo "Missing AZURE_SUBSCRIPTION_ID (set as GitHub Actions Variable or Secret)." >&2
+            missing=1
+          fi
+          if [[ -z "${AZURE_AI_PROJECT_ENDPOINT}" ]]; then
+            echo "Missing AZURE_AI_PROJECT_ENDPOINT (set as GitHub Actions Variable or Secret)." >&2
+            missing=1
+          fi
+
+          if [[ "${missing}" != "0" ]]; then
+            echo >&2
+            echo "How to fix (recommended):" >&2
+            echo "- Run scripts/setup_github_actions_oidc.sh --configure-github (or .ps1) to auto-create OIDC + set Variables" >&2
+            echo "- Or set repo Variables in: Settings → Secrets and variables → Actions → Variables" >&2
+            exit 1
+          fi
+
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          # Prefer GitHub Repository Variables (vars) to allow 0 secrets in a lab.
-          # Fallback to secrets for teams who prefer secrets.
-          client-id: ${{ vars.AZURE_CLIENT_ID || secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID || secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID || secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Create/reuse Foundry agents and write id map
-        env:
-          AZURE_AI_PROJECT_ENDPOINT: ${{ vars.AZURE_AI_PROJECT_ENDPOINT || secrets.AZURE_AI_PROJECT_ENDPOINT }}
-          AZURE_AI_MODEL_DEPLOYMENT_NAME: ${{ vars.AZURE_AI_MODEL_DEPLOYMENT_NAME || secrets.AZURE_AI_MODEL_DEPLOYMENT_NAME || 'gpt-5-mini' }}
         run: |
           python .github/skills/maf-agent-create/scripts/create_agents_from_workflow.py \
             --workflow workflows/social_insight_workflow.yaml \
@@ -98,8 +132,6 @@ jobs:
 
       - name: Run workflow (Azure AI)
         env:
-          AZURE_AI_PROJECT_ENDPOINT: ${{ vars.AZURE_AI_PROJECT_ENDPOINT || secrets.AZURE_AI_PROJECT_ENDPOINT }}
-          AZURE_AI_MODEL_DEPLOYMENT_NAME: ${{ vars.AZURE_AI_MODEL_DEPLOYMENT_NAME || secrets.AZURE_AI_MODEL_DEPLOYMENT_NAME || 'gpt-5-mini' }}
           RUN_OUT: output/ci-azure-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           cd generated/social_insight_workflow

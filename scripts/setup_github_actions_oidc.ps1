@@ -142,18 +142,6 @@ if ($hasRole -eq "0") {
 }
 
 Write-Info ""
-Write-Info "== Next step: set GitHub Actions Repository Variables (recommended for labs) =="
-Write-Info "In your GitHub repo: Settings → Secrets and variables → Actions → Variables"
-Write-Info ""
-Write-Info "Create these Variables:"
-Write-Info "  AZURE_CLIENT_ID=$appId"
-Write-Info "  AZURE_TENANT_ID=$TenantId"
-Write-Info "  AZURE_SUBSCRIPTION_ID=$SubscriptionId"
-Write-Info ""
-Write-Info "Also set (per-student):"
-Write-Info "  AZURE_AI_PROJECT_ENDPOINT=<your-foundry-project-endpoint>"
-Write-Info "  AZURE_AI_MODEL_DEPLOYMENT_NAME=<your-model-deployment>"
-
 if ($ConfigureGitHub) {
   if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     throw "GitHub CLI (gh) not found. Install it or run without -ConfigureGitHub."
@@ -177,5 +165,34 @@ if ($ConfigureGitHub) {
     gh variable set -R $GitHubRepo AZURE_AI_MODEL_DEPLOYMENT_NAME -b $AiModelDeploymentName | Out-Null
   }
 
-  Write-Info "Done. Variables are set in GitHub repo settings."
+  Write-Info ""
+  Write-Info "== Done: GitHub Actions Variables written =="
+  Write-Info "repo: $GitHubRepo"
+  Write-Info "AZURE_CLIENT_ID=$appId"
+  Write-Info "AZURE_TENANT_ID=$TenantId"
+  Write-Info "AZURE_SUBSCRIPTION_ID=$SubscriptionId"
+  if (-not [string]::IsNullOrWhiteSpace($AiProjectEndpoint)) {
+    Write-Info "AZURE_AI_PROJECT_ENDPOINT=(set)"
+  } else {
+    Write-Info "AZURE_AI_PROJECT_ENDPOINT=(NOT set; pass -AiProjectEndpoint or set it manually)"
+  }
+  if (-not [string]::IsNullOrWhiteSpace($AiModelDeploymentName)) {
+    Write-Info "AZURE_AI_MODEL_DEPLOYMENT_NAME=$AiModelDeploymentName"
+  } else {
+    Write-Info "AZURE_AI_MODEL_DEPLOYMENT_NAME=(not set; workflow default is gpt-5-mini)"
+  }
+} else {
+  Write-Info "== Next step: set GitHub Actions Repository Variables (recommended for labs) =="
+  Write-Info "In your GitHub repo: Settings → Secrets and variables → Actions → Variables"
+  Write-Info ""
+  Write-Info "Create these Variables:"
+  Write-Info "  AZURE_CLIENT_ID=$appId"
+  Write-Info "  AZURE_TENANT_ID=$TenantId"
+  Write-Info "  AZURE_SUBSCRIPTION_ID=$SubscriptionId"
+  Write-Info ""
+  Write-Info "Also set (per-student):"
+  Write-Info "  AZURE_AI_PROJECT_ENDPOINT=<your-foundry-project-endpoint>"
+  Write-Info "  AZURE_AI_MODEL_DEPLOYMENT_NAME=<your-model-deployment>"
+  Write-Info ""
+  Write-Info "Tip: re-run with -ConfigureGitHub to auto-write Variables via gh."
 }
