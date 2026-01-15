@@ -101,32 +101,32 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-import json, os
-run_out = os.environ.get("RUN_OUT")
-summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          import json, os
+          run_out = os.environ.get("RUN_OUT")
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
 
-def read_json(path):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as exc:
-        return {"_error": str(exc)}
+          def read_json(path):
+            try:
+              with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+            except Exception as exc:
+              return {"_error": str(exc)}
 
-clusters = read_json(os.path.join(run_out, "clusters", "hotspots.json"))
-insights = read_json(os.path.join(run_out, "insights", "insights.json"))
+          clusters = read_json(os.path.join(run_out, "clusters", "hotspots.json"))
+          insights = read_json(os.path.join(run_out, "insights", "insights.json"))
 
-clusters_mode = clusters.get("mode")
-insights_mode = insights.get("mode")
+          clusters_mode = clusters.get("mode")
+          insights_mode = insights.get("mode")
 
-print(f"clusters.mode={clusters_mode}")
-print(f"insights.mode={insights_mode}")
+          print(f"clusters.mode={clusters_mode}")
+          print(f"insights.mode={insights_mode}")
 
-if summary:
-    with open(summary, "a", encoding="utf-8") as f:
-        f.write("\n## Fallback Modes\n\n")
-        f.write(f"- clusters.mode: {clusters_mode}\n")
-        f.write(f"- insights.mode: {insights_mode}\n")
-PY
+          if summary:
+            with open(summary, "a", encoding="utf-8") as f:
+              f.write("\n## Fallback Modes\n\n")
+              f.write(f"- clusters.mode: {clusters_mode}\n")
+              f.write(f"- insights.mode: {insights_mode}\n")
+          PY
 
       - name: Update frontend/report.md
         shell: bash
